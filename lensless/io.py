@@ -336,3 +336,241 @@ def load_data(
     data = np.array(data, dtype=dtype)
 
     return psf, data
+
+
+def load_3d_psf(
+    fp,
+    downsample=1,
+    return_float=True,
+    bg_pix=(5, 25),
+    return_bg=False,
+    dtype=np.float32,
+    single_psf=False,
+    shape=None,
+):
+    """
+    Load and process 3D PSF for analysis or for reconstruction.
+
+    Basic steps are:
+    - Load image.
+    - (Optionally) subtract background. Recommended.
+    - (Optionally) resize to more manageable size
+    - (Optionally) normalize within [0, 1] if using for reconstruction; otherwise cast back to uint for analysis.
+
+    Parameters
+    ----------
+    fp : str
+        Full path to file.
+    downsample : int, optional
+        Downsampling factor. Recommended for image reconstruction.
+    return_float : bool, optional
+        Whether to return PSF as float array, or unsigned int.
+    bg_pix : tuple, optional
+        Section of pixels to take from top left corner to remove background level. Set to `None` to omit this
+        step, althrough it is highly recommended.
+    return_bg : bool, optional
+        Whether to return background level, for removing from data for reconstruction.
+    flip : bool, optional
+        Whether to flip up-down and left-right.
+    verbose : bool
+        Whether to print metadata.
+    bayer : bool
+        Whether input data is Bayer.
+    blue_gain : float
+        Blue gain for color correction.
+    red_gain : float
+        Red gain for color correction.
+    dtype : float32 or float64
+        Data type of returned data.
+    nbits_out : int
+        Output bit depth. Default is to use that of input.
+    single_psf : bool
+        Whether to sum RGB channels into single PSF, same across channels. Done
+        in "Learned reconstructions for practical mask-based lensless imaging"
+        of Kristina Monakhova et. al.
+
+    Returns
+    -------
+    psf :py:class:`~numpy.ndarray`
+        3-D array of PSF.
+    """
+
+    # load image data
+    assert os.path.isfile(fp)
+    psf = np.load(fp)
+    original_dtype = psf.dtype
+    psf = np.array(psf, dtype=dtype)
+
+    #TODO : undestand why this is necessary
+    psf = np.swapaxes(psf,1,2)
+
+    # check that all depths of the psf have the same shape.
+    for i in range(psf.shape[0]) :
+        assert psf[0].shape == psf[i].shape
+
+    # subtract background, assume black edges
+    if bg_pix is None:
+        bg = np.zeros(len(np.shape(psf[0])))
+
+    else:
+        # grayscale
+        if len(np.shape(psf)) < 4:
+            bg = np.mean(psf[:, bg_pix[0]: bg_pix[1], bg_pix[0]: bg_pix[1]])
+            psf -= bg
+
+        # rgb
+        else:
+            bg = []
+            for i in range(3):
+                bg_i = np.mean(psf[:, bg_pix[0]: bg_pix[1], bg_pix[0]: bg_pix[1], i])
+                psf[:, :, :, i] -= bg_i
+                bg.append(bg_i)
+
+        psf = np.clip(psf, a_min=0, a_max=psf.max())
+        bg = np.array(bg)
+
+    # resize
+    if shape:
+        for i in range(psf.shape[0]):
+            psf[i] = resize(psf[i], shape=shape)
+    elif downsample != 1:
+        for i in range(psf.shape[0]):
+            psf[i] = resize(psf[i], factor=1 / downsample)
+
+    if single_psf:
+        if(len(psf.shape) == 4):
+            # TODO : in Lensless Learning, they sum channels --> `psf_diffuser = np.sum(psf_diffuser,2)`
+            # https://github.com/Waller-Lab/LenslessLearning/blob/master/pre-trained%20reconstructions.ipynb
+            psf = np.sum(psf, 2)
+            psf = psf[:, :, :, np.newaxis]
+        else:
+            warnings.warn("Notice : single_psf has no effect for grayscale psf")
+            single_psf = False
+
+    # normalize
+    if return_float:
+        # psf /= psf.max()
+        psf /= np.linalg.norm(psf.ravel())
+    else:
+        psf = psf.astype(original_dtype)
+
+    if return_bg:
+        return psf, bg
+    else:
+        return psf
+
+def load_3d_data(
+    psf_fp,
+    data_fp,
+    downsample=None,
+    bg_pix=(5, 25),
+    plot=True,
+    flip=False,
+    bayer=False,
+    blue_gain=None,
+    red_gain=None,
+    gamma=None,
+    gray=False,
+    dtype=np.float32,
+    single_psf=False,
+    shape=None,
+):
+    """
+    Load data for 3d image reconstruction.
+
+    Parameters
+    ----------
+    psf_fp : str
+        Full path to PSF file.
+    data_fp : str
+        Full path to measurement file.
+    downsample : int or float
+        Downsampling factor.
+    bg_pix : tuple, optional
+        Section of pixels to take from top left corner to remove background
+        level. Set to `None` to omit this step, although it is highly
+        recommended.
+    plot : bool, optional
+        Whether or not to plot PSF and raw data.
+    flip : bool
+        Whether to flip data (vertical and horizontal).
+    bayer : bool
+        Whether input data is Bayer.
+    blue_gain : float
+        Blue gain for color correction.
+    red_gain : float
+        Red gain for color correction.
+    gamma : float, optional
+        Optional gamma factor to apply, ONLY for plotting. Default is None.
+    gray : bool
+        Whether to load as grayscale or RGB.
+    dtype : float32 or float64
+        Data type of returned data.
+    single_psf : bool
+        Whether to sum RGB channels into single PSF, same across channels. Done
+        in "Learned reconstructions for practical mask-based lensless imaging"
+        of Kristina Monakhova et. al.
+
+    Returns
+    -------
+    psf :py:class:`~numpy.ndarray`
+        3-D array of PSF.
+    data :py:class:`~numpy.ndarray`
+        2-D array of raw measurement data.
+    """
+
+    assert os.path.isfile(psf_fp)
+    assert os.path.isfile(data_fp)
+    if shape is None:
+        assert downsample is not None
+
+    # load and process PSF data
+    psf, bg = load_3d_psf(
+        psf_fp,
+        downsample=downsample,
+        return_float=True,
+        bg_pix=bg_pix,
+        return_bg=True,
+        dtype=dtype,
+        single_psf=single_psf,
+        shape=shape,
+    )
+
+    # load and process raw measurement
+    data = load_image(data_fp, flip=flip, bayer=bayer, blue_gain=blue_gain, red_gain=red_gain)
+    data = np.array(data, dtype=dtype)
+
+    data -= bg
+    data = np.clip(data, a_min=0, a_max=data.max())
+
+    # if grayscale, psf shape is 3 (depth, width, height)
+    if len(psf.shape) == 3:
+        pass
+
+    # if rgb, psf shape is 4 (depth, width, height, color)
+    else:
+        assert (len(psf.shape) == 4)
+        assert (len(psf.shape[3]) == 3)
+
+    # load_3d_psf yields a psf which each depth have the same shape, so it is sufficient to check the first one only
+    if data.shape != psf[0].shape:
+        # in DiffuserCam dataset, images are already reshaped
+        data = resize(data, shape=psf[0].shape[:2])
+    data /= np.linalg.norm(data.ravel())
+
+
+    # todo : this will need to be fixed
+    if gray:
+        psf = rgb2gray(psf)
+        data = rgb2gray(data)
+
+    if plot:
+        ax = plot_image(psf[0], gamma=gamma) #todo : maybe plotting in 3d could be nice ? but for now plotting nearest depth will be enough.
+        ax.set_title("PSF")
+        ax = plot_image(data, gamma=gamma)
+        ax.set_title("Raw data")
+
+    psf = np.array(psf, dtype=dtype)
+    data = np.array(data, dtype=dtype)
+
+    return psf, data
