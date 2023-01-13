@@ -4,6 +4,10 @@
 
 #### Added
 
+- Simulator
+	-Simulates psf that are masks or diffusers
+	-Simulates 3D scene by raytracing or convolution
+
 - Support of 3D data
 	- Support of 3D psfs, which have to be provided as .npy files.
 	- Support of 3D reconstruction for vanilla Gradient Descent (APGD ? todo check)
