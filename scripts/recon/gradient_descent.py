@@ -8,17 +8,16 @@ python scripts/recon/gradient_descent.py --psf_fp data/psf/tape_rgb.png -\
 
 """
 
-import os
 import numpy as np
 import time
 import pathlib as plib
-from datetime import datetime
 import click
 import matplotlib.pyplot as plt
 from lensless.io import load_data
+from save_recon import make_dir
 from lensless import (
     GradientDescentUpdate,
-    GradientDescient,
+    GradientDescent,
     NesterovGradientDescent,
     FISTA,
 )
@@ -149,15 +148,11 @@ def gradient_descent(
     if disp < 0:
         disp = None
     if save:
-        save = os.path.basename(data_fp).split(".")[0]
-        timestamp = datetime.now().strftime("_%d%m%Y_%Hh%M")
-        save = "gd_" + save + timestamp
-        save = plib.Path(__file__).parent / save
-        save.mkdir(exist_ok=False)
+        save = make_dir("gd_", data_fp)
 
     start_time = time.time()
     if method is GradientDescentUpdate.VANILLA:
-        recon = GradientDescient(psf)
+        recon = GradientDescent(psf)
     elif method is GradientDescentUpdate.NESTEROV:
         recon = NesterovGradientDescent(psf)
     else:
@@ -172,7 +167,7 @@ def gradient_descent(
     if not no_plot:
         plt.show()
     if save:
-        np.save(plib.Path(save) / "final_reconstruction.npy", res[0])
+        np.save(str(plib.Path(save) / "final_reconstruction.npy"), res[0])
         print(f"Files saved to : {save}")
 
 

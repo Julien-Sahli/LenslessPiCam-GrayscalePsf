@@ -1,6 +1,6 @@
 import numpy as np
 from lensless.io import load_data
-from lensless import GradientDescient, NesterovGradientDescent, FISTA, ADMM, APGD
+from lensless import GradientDescent, NesterovGradientDescent, FISTA, ADMM, APGD
 
 
 psf_fp = "data/psf/tape_rgb.png"
@@ -11,7 +11,7 @@ disp = None
 
 
 def test_algo():
-    for algo in [GradientDescient, NesterovGradientDescent, FISTA, ADMM, APGD]:
+    for algo in [GradientDescent, NesterovGradientDescent, FISTA, ADMM, APGD]:
         for gray in [True, False]:
             for dtype in [np.float32, np.float64]:
                 psf, data = load_data(
@@ -28,10 +28,11 @@ def test_algo():
                 recon = algo(psf, dtype=dtype, realconv=False)
                 recon.set_data(data)
                 res = recon.apply(n_iter=n_iter, disp_iter=None, plot=False)
+                assert len(psf.shape) == 4
                 if gray:
-                    assert len(psf.shape) == 2
+                    assert psf.shape[3] == 1
                 else:
-                    assert len(psf.shape) == 3
+                    assert psf.shape[3] == 3
                 assert res.dtype == dtype, f"Got {res.dtype}, expected {dtype}"
 
 

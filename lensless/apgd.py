@@ -84,7 +84,7 @@ class APGD(ReconstructionAlgorithm):
             Whether to apply convolution for real signals (if available).
         """
 
-        # PSF and data are the same size / shape
+        # PSF and data are the same kernel_size / shape
         self._original_shape = psf.shape
         self._original_size = psf.size
 
@@ -95,7 +95,7 @@ class APGD(ReconstructionAlgorithm):
         self._max_iter = max_iter
 
         # Convolution operator
-        if realconv:  # todo : add from drive
+        if realconv:
             self._H = RealFFTConvolve2D(self._psf, dtype=dtype)
         else:
             assert self._is_rgb is False, "RGB not supported for `Convolve2D`."

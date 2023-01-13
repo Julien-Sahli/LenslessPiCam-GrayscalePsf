@@ -118,6 +118,7 @@ def load_psf(
     single_psf=False,
     shape=None,
     use_3d=False,
+    global_ravel=False,
 ):
     """
     Load and process PSF for analysis or for reconstruction.
@@ -125,7 +126,7 @@ def load_psf(
     Basic steps are:
     - Load image.
     - (Optionally) subtract background. Recommended.
-    - (Optionally) resize to more manageable size
+    - (Optionally) resize to more manageable kernel_size
     - (Optionally) normalize within [0, 1] if using for reconstruction; otherwise cast back to uint for analysis.
 
     Parameters
@@ -229,12 +230,10 @@ def load_psf(
     elif downsample != 1:
         psf = np.array([resize(p, factor=1 / downsample) for p in psf])
 
-    # todo : ideally resize would need to keep dimensions, but it is used in other places of the code so I'd rather not change it for now
-    # todo : check
     if len(psf.shape) == 3:
         psf = np.array(psf[:, :, :, np.newaxis])
 
-        if not grayscale:
+        if not grayscale: # and single psf ?
             # TODO : in Lensless Learning, they sum channels --> `psf_diffuser = np.sum(psf_diffuser,2)`
             # https://github.com/Waller-Lab/LenslessLearning/blob/master/pre-trained%20reconstructions.ipynb
             psf = np.sum(psf, 3)
@@ -246,7 +245,16 @@ def load_psf(
     # normalize
     if return_float:
         # psf /= psf.max()
-        psf /= np.linalg.norm(psf.ravel())
+        if global_ravel:
+            psf /= np.linalg.norm(psf.ravel())
+        else:
+            # actually makes the same thing...
+            fact = np.linalg.norm(psf.ravel())
+            for i in range(1, len(psf)):
+                f = np.linalg.norm(psf[i].ravel())
+                if fact < f:
+                    fact = f
+            psf /= fact
     else:
         psf = psf.astype(original_dtype)
 
@@ -271,6 +279,7 @@ def load_data(
     dtype=np.float32,
     single_psf=False,
     shape=None,
+    global_ravel=False,
 ):
     """
     Load data for image reconstruction.
@@ -342,6 +351,7 @@ def load_data(
         single_psf=single_psf,
         shape=shape,
         use_3d=use_3d,
+        global_ravel=global_ravel,
     )
 
     # load and process raw measurement

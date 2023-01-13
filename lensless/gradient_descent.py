@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from lensless.recon import ReconstructionAlgorithm
 import inspect
@@ -40,8 +42,8 @@ def non_neg(xi):
     return xi
 
 
-class GradientDescient(ReconstructionAlgorithm):
-    def __init__(self, psf, dtype=np.float32, proj=non_neg, **kwargs):
+class GradientDescent(ReconstructionAlgorithm):
+    def __init__(self, psf, dtype=np.float32, proj=non_neg, initial_est=None, **kwargs):
         """
         Object for applying projected gradient descent.
 
@@ -58,33 +60,53 @@ class GradientDescient(ReconstructionAlgorithm):
             Projection function to apply at each iteration. Default is
             non-negative.
         """
-
-        super(GradientDescient, self).__init__(psf, dtype)
+        self._initial_est = initial_est  # If none, will initialize a plain color image.
+        super(GradientDescent, self).__init__(psf, dtype)
         assert callable(proj)
         self._proj = proj
 
     def _crop(self, x):
-        return x[:, self._start_idx[0] : self._end_idx[0], self._start_idx[1] : self._end_idx[1], :]
+        return x[:, self._start_idx[0]:self._end_idx[0], self._start_idx[1]:self._end_idx[1]]
 
     def _pad(self, v):
         vpad = np.zeros(self._padded_shape).astype(v.dtype)
-        for i in range(vpad.shape[0]):
-            vpad[
-                i, self._start_idx[0] : self._end_idx[0], self._start_idx[1] : self._end_idx[1]
-            ] = v[i, :, :]
+        vpad[:, self._start_idx[0]:self._end_idx[0], self._start_idx[1]:self._end_idx[1]] = v
         return vpad
 
     def reset(self):
-        # initial guess, half intensity image
-        # for online approach could use last reconstruction
-        psf_flat = self._psf.reshape(-1, self._psf_shape[3])
-        pixel_start = (np.max(psf_flat, axis=0) + np.min(psf_flat, axis=0)) / 2
-        x = np.ones(self._psf_shape, dtype=self._dtype) * pixel_start
+
+        # initial guess is half intensity image by default
+        if self._initial_est is not None:
+            x = self._initial_est
+            if len(x.shape) == 3:  # if input we gave is under-dimensioned, determine its type
+                if x.shape[0] == 1:
+                    x = np.array(x[:, :, :, np.newaxis])
+                elif x.shape[2] == 3: # 2d rgb
+                    x = np.array(x[np.newaxis, :, :, :])
+                else:
+                    warnings.warn("Error : could not infer data type for initial estimation")
+                    self._initial_est = None
+
+            elif len(x.shape) == 2:  # grayscale 2d
+                x = np.array(x[np.newaxis, :, :, np.newaxis])
+
+            assert (x.shape == self._psf_shape).all
+            print("THERE !", np.mean(x), np.max(x))
+            psf_flat = self._psf.reshape(-1, self._psf_shape[3])
+            pixel_start = (np.max(psf_flat, axis=0) + np.min(psf_flat, axis=0)) / 2
+            print("and px start is", pixel_start)
+            x *= pixel_start
+            x += pixel_start
+
+        if self._initial_est is None:
+            psf_flat = self._psf.reshape(-1, self._psf_shape[3])
+            pixel_start = (np.max(psf_flat, axis=0) + np.min(psf_flat, axis=0)) / 2
+            x = np.ones(self._psf_shape, dtype=self._dtype) * pixel_start
+
         self._image_est = self._pad(x)
+
         # spatial frequency response
-        self._H = fft.rfft2(
-            self._pad(self._psf), norm="ortho", axes=(0, 1, 2), s=self._padded_shape[:3]
-        )
+        self._H = fft.rfft2(self._pad(self._psf), norm="ortho", axes=(1, 2), s=self._padded_shape[1:3])
         self._Hadj = np.conj(self._H)
 
         Hadj_flat = self._Hadj.reshape(-1, self._psf_shape[3])
@@ -96,18 +118,14 @@ class GradientDescient(ReconstructionAlgorithm):
         return self._backward(diff)
 
     def _forward(self):
-        Vk = fft.rfft2(self._image_est, axes=(0, 1, 2), s=self._padded_shape[:3])
+        Vk = fft.rfft2(self._image_est, axes=(1, 2), s=self._padded_shape[1:3])
         return self._crop(
-            fft.ifftshift(
-                fft.irfft2(self._H * Vk, axes=(0, 1, 2), s=self._padded_shape[:3]), axes=(0, 1, 2)
-            )
+            fft.ifftshift(fft.irfft2(self._H * Vk, axes=(1, 2), s=self._padded_shape[1:3]), axes=(1, 2))
         )
 
     def _backward(self, x):
-        X = fft.rfft2(self._pad(x), axes=(0, 1, 2), s=self._padded_shape[:3])
-        return fft.ifftshift(
-            fft.irfft2(self._Hadj * X, axes=(0, 1, 2), s=self._padded_shape[:3]), axes=(0, 1, 2)
-        )
+        X = fft.rfft2(self._pad(x), axes=(1, 2), s=self._padded_shape[1:3])
+        return fft.ifftshift(fft.irfft2(self._Hadj * X, axes=(1, 2), s=self._padded_shape[1:3]), axes=(1, 2))
 
     def _update(self):
         self._image_est -= self._alpha * self._grad()
@@ -117,7 +135,7 @@ class GradientDescient(ReconstructionAlgorithm):
         return self._proj(self._crop(self._image_est)).squeeze()
 
 
-class NesterovGradientDescent(GradientDescient):
+class NesterovGradientDescent(GradientDescent):
     """
     Object for applying projected gradient descent with Nesterov momentum for
     acceleration.
@@ -143,7 +161,7 @@ class NesterovGradientDescent(GradientDescient):
         self._image_est = self._proj(self._image_est)
 
 
-class FISTA(GradientDescient):
+class FISTA(GradientDescent):
     """
     Object for applying projected gradient descent with FISTA (Fast Iterative
     Shrinkage-Thresholding Algorithm) for acceleration.

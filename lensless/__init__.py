@@ -1,7 +1,7 @@
 from .recon import ReconstructionAlgorithm
 from .admm import ADMM
 from .gradient_descent import (
-    GradientDescient,
+    GradientDescent,
     NesterovGradientDescent,
     FISTA,
     GradientDescentUpdate,

@@ -17,6 +17,7 @@ from datetime import datetime
 import numpy as np
 from lensless.io import load_data
 from lensless import ADMM
+from save_recon import make_dir
 
 
 @click.command()
@@ -136,11 +137,7 @@ def admm(
     if disp < 0:
         disp = None
     if save:
-        save = os.path.basename(data_fp).split(".")[0]
-        timestamp = datetime.now().strftime("_%d%m%d%Y_%Hh%M")
-        save = "admm_" + save + timestamp
-        save = plib.Path(__file__).parent / save
-        save.mkdir(exist_ok=False)
+        save = make_dir("admm_", data_fp)
 
     start_time = time.time()
     recon = ADMM(psf)
@@ -154,7 +151,7 @@ def admm(
     if not no_plot:
         plt.show()
     if save:
-        np.save(plib.Path(save) / "final_reconstruction.npy", res[0])
+        np.save(str(plib.Path(save) / "final_reconstruction.npy"), res[0])
         print(f"Files saved to : {save}")
 
 

@@ -38,11 +38,11 @@ class ADMM(ReconstructionAlgorithm):
         dtype : float32 or float64
             Data type to use for optimization.
         mu1 : float
-            Step size for updating primal/dual variables.
+            Step kernel_size for updating primal/dual variables.
         mu2 : float
-            Step size for updating primal/dual variables.
+            Step kernel_size for updating primal/dual variables.
         mu3 : float
-            Step size for updating primal/dual variables.
+            Step kernel_size for updating primal/dual variables.
         tau : float
             Weight for L1 norm of `psi` applied to the image estimate.
         psi : :py:class:`function`, optional
@@ -61,6 +61,10 @@ class ADMM(ReconstructionAlgorithm):
 
         # call reset() to initialize matrices
         super(ADMM, self).__init__(psf, dtype)
+
+        if self._padded_shape[0]>1:
+            print("Warning : ADMM is not working yet for 3D. The resulting reconstruction will have"
+                  "the same values along the depth axis.")
 
         # set prior
         if psi is None:
@@ -239,6 +243,12 @@ def finite_diff_adj(x):
 
 def finite_diff_gram(shape, dtype=np.float32):
     gram = np.zeros(shape, dtype=dtype)
-    gram[0, 0, 0] = 6
-    gram[0, 0, 1] = gram[0, 1, 0] = gram[1, 0, 0] = gram[0, 0, -1] = gram[0, -1, 0] = gram[-1, 0, 0] = -1
+    if shape[0] == 1:
+        gram[0, 0, 0] = 4
+        gram[0, 0, 1] = gram[0, 0, -1] = gram[0, 1, 0] = gram[0, -1, 0] = -1
+    else:
+        gram[0, 0, 0] = 6
+        gram[0, 0, 1] = gram[0, 0, -1] = gram[0, 1, 0] = gram[0, -1, 0] = gram[1, 0, 0] = gram[
+            -1, 0, 0
+        ] = -1
     return fft.rfft2(gram, axes=(0, 1, 2))

@@ -42,6 +42,43 @@ def resize(img, factor=None, shape=None, interpolation=cv2.INTER_CUBIC):
         resized = cv2.resize(img, dsize=shape[::-1], interpolation=interpolation)
     return np.clip(resized, min_val, max_val)
 
+def resize3d(img, factor, interpolation=cv2.INTER_CUBIC):
+    """
+    Resize by given factor.
+
+    Parameters
+    ----------
+    img :py:class:`~numpy.ndarray`
+        Downsampled image.
+    factor : int or float
+        Resizing factor.
+    shape : tuple
+        (Height, width).
+    interpolation : OpenCV interpolation method
+        See https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#cv2.resize
+
+    Returns
+    -------
+    img :py:class:`~numpy.ndarray`
+        Resized 3d image.
+    """
+    assert factor is not None
+    min_val = img.min()
+    max_val = img.max()
+    shape_1 = tuple((np.array(img.shape)[1:3] * factor).astype(int))[::-1]
+    shape_2 = tuple((np.array(img.shape)[0:2] * factor).astype(int))
+
+
+    #resize along x and y by the wanted factors
+    resized = [cv2.resize(layer, dsize=shape_1, interpolation=interpolation) for layer in img]
+
+    #resize along z by the wanted factor, and along y by a 1 factor
+    resized = np.swapaxes(resized, 0, 2)
+    resized = [cv2.resize(layer, dsize=shape_2, interpolation=interpolation) for layer in resized]
+    resized = np.swapaxes(resized,  0, 2)
+
+    return np.clip(resized, min_val, max_val)
+
 
 def rgb2gray(rgb, weights=None):
     """

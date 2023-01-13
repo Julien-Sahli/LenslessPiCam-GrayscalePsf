@@ -9,13 +9,12 @@ python scripts/recon/template.py --psf_fp data/psf/tape_rgb.png \
 
 """
 
-import os
 import time
 import numpy as np
 import pathlib as plib
 import click
 import matplotlib.pyplot as plt
-from datetime import datetime
+from save_recon import make_dir
 from lensless.io import load_data
 
 
@@ -134,11 +133,7 @@ def reconstruction(
     )
 
     if save:
-        save = os.path.basename(data_fp).split(".")[0]
-        timestamp = datetime.now().strftime("_%d%m%d%Y_%Hh%M")
-        save = "YOUR_RECONSTRUCTION_" + save + timestamp
-        save = plib.Path(__file__).parent / save
-        save.mkdir(exist_ok=False)
+        save = make_dir("YOUR_RECONSTRUCTION_", data_fp)
 
     start_time = time.time()
     # TODO : setup for your reconstruction algorithm
@@ -151,7 +146,7 @@ def reconstruction(
     if not no_plot:
         plt.show()
     if save:
-        np.save(plib.Path(save) / "final_reconstruction.npy", res[0])
+        np.save(str(plib.Path(save) / "final_reconstruction.npy"), res[0])
         print(f"Files saved to : {save}")
 
 

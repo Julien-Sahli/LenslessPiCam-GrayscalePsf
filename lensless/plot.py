@@ -1,7 +1,6 @@
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
-from scipy.ndimage import zoom
 
 from lensless.util import FLOAT_DTYPES, get_max_val, gamma_correction
 
@@ -11,7 +10,7 @@ except:
     from lensless.autocorr import autocorr2d
 
 
-def plot_image(img, ax=None, gamma=None, normalize=True):
+def plot_image(img, ax=None, gamma=None, normalize=True, axis=0):
     """
     Plot image data.
 
@@ -25,6 +24,8 @@ def plot_image(img, ax=None, gamma=None, normalize=True):
             Gamma correction factor to apply for plots. Default is None.
     normalize : bool
         Whether to normalize data to maximum range. Default is True.
+    axis : int
+        For 3D data, the axis on which to project the data
 
     Returns
     -------
@@ -51,12 +52,12 @@ def plot_image(img, ax=None, gamma=None, normalize=True):
     # full data format : [depth, width, height, color]
     if len(img.shape) == 4:
         if img.shape[3] == 3:  # 3d rgb
-            sum_img = np.sum(img_norm, axis=0)
+            sum_img = np.sum(img_norm, axis=axis)
             ax.imshow(sum_img)
 
         else:
             assert img.shape[3] == 1  # 3d grayscale with color channel extended
-            sum_img = np.sum(img_norm[:, :, :, 0], axis=0)
+            sum_img = np.sum(img_norm[:, :, :, 0], axis=axis)
             ax.imshow(sum_img, cmap="gray")
 
     # data of length 3 means we have to infer whethever depth or color is missing, based on shape.
@@ -69,7 +70,7 @@ def plot_image(img, ax=None, gamma=None, normalize=True):
             ax.imshow(img_norm[:, :, 0], cmap="gray")
 
         else:  # 3D grayscale
-            sum_img = np.sum(img_norm, axis=0)
+            sum_img = np.sum(img_norm, axis=axis)
             ax.imshow(sum_img, cmap="gray")
 
     # data of length 2 means we have only width and height

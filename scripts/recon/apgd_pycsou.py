@@ -34,6 +34,7 @@ import matplotlib.pyplot as plt
 from lensless.io import load_data
 from lensless.plot import plot_image
 from lensless import APGD, APGDPriors
+from save_recon import make_dir
 import os
 import pathlib as plib
 
@@ -168,11 +169,7 @@ def apgd(
     )
 
     if save:
-        save = os.path.basename(data_fp).split(".")[0]
-        timestamp = datetime.now().strftime("_%d%m%Y_%Hh%M")
-        save = "apgd_" + save + timestamp
-        save = plib.Path(__file__).parent / save
-        save.mkdir(exist_ok=False)
+        save = make_dir("apgd_", data_fp)
 
     if prior == APGDPriors.L2:
         diff_penalty = prior
@@ -183,7 +180,7 @@ def apgd(
 
     start_time = time.time()
 
-    if False and (real_conv or gray): #TODO
+    if False and (real_conv or gray):  # TODO
 
         # for `real_conv` parallelize RGB channels with custom operator
         recon = APGD(
@@ -219,21 +216,18 @@ def apgd(
         ]
 
         [
-            [recon[dep][col].set_data(data[dep, :, :, col]) for col in range(data.shape[3])]
-            for dep in range(data.shape[0])
+            [recon[dep][col].set_data(data[0, :, :, col]) for col in range(data.shape[3])]
+            for dep in range(psf.shape[0])
         ]
         print(f"Setup time : {time.time() - start_time} s")
         print(data.shape)
         start_time = time.time()
         final_img = []
         print("Looping over depths")
-        for dep in range(data.shape[0]):
-            print(
-                f"-- depth {dep}",
-            )
-            print("Looping over channels...")
+        for dep in range(psf.shape[0]):
+            print(f"-- depth {dep} : Looping over channels...")
             for col in range(data.shape[3]):
-                print(f"-- channel {col}", end="")
+                print(f"---- channel {col}", end="")
                 final_img.append(
                     recon[dep][col].apply(
                         n_iter=max_iter, disp_iter=max_iter + 1, save=False, gamma=gamma, plot=False
@@ -244,7 +238,7 @@ def apgd(
         print(f"Processing time : {time.time() - start_time} s")
 
         print(np.array(final_img).shape)
-        final_img = np.transpose(np.array(final_img), (1, 2, 0))
+        final_img = np.array(final_img)
         ax = plot_image(final_img, gamma=gamma)
         ax.set_title("Final reconstruction after {} iterations".format(max_iter))
         if save:

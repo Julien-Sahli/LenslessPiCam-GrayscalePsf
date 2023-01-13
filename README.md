@@ -116,7 +116,7 @@ The core algorithmic component of `LenslessPiCam` is the abstract class
 `lensless.ReconstructionAlgorithm`. The three reconstruction strategies 
 available in `LenslessPiCam` derive from this class:
 
-- `lensless.GradientDescient`: projected gradient descent 
+- `lensless.GradientDescent`: projected gradient descent 
   with a non-negativity constraint. Two accelerated approaches are also
   available: `lensless.NesterovGradientDescent` and `lensless.FISTA`.
 - `lensless.ADMM`: alternating direction method of multipliers (ADMM) with
